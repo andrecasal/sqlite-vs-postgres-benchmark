@@ -78,16 +78,11 @@ SQLite is faster per-query because it executes queries as function calls within 
 | 16 | 35,370 |
 | 32 | 24,371 |
 
-**PostgreSQL peaks at 35,370 ops/sec with 16 connections — exceeding SQLite's 23,403.** The crossover happens at ~4 concurrent connections. When does this matter? When your architecture has multiple processes writing to the same database at the same time:
+**PostgreSQL peaks at 35,370 ops/sec with 16 connections — exceeding SQLite's 23,403.** The crossover happens at ~4 concurrent connections.
 
-- **IoT ingestion** — thousands of sensors pushing telemetry through a fleet of ingestion workers
-- **Marketplace with high-volume sellers** — Shopify-style platforms where hundreds of merchants update inventory, process orders, and sync catalogs simultaneously
-- **Ad tech / analytics pipelines** — clickstream events arriving from dozens of edge collectors, all writing to the same events table
-- **Horizontally scaled API** — 8+ app servers behind a load balancer, each with its own database connection pool
+The question isn't "do I have concurrent users" — every web app does. It's **"do I have more writes per second than one process can handle?"** SQLite handles ~23K writes/sec through a single writer. A 1M DAU SaaS needs ~700 writes/sec at peak. You'd need to be well past 10M DAU with write-heavy patterns before a single writer becomes the bottleneck.
 
-If your product is a single-server web app — a SaaS dashboard, a content platform, an e-commerce storefront — your writes serialize through one process regardless of database, and SQLite's lower per-query overhead wins.
-
-**But for the 1M DAU SaaS needing ~700 writes/sec at peak, both databases are at <10% capacity.** Throughput is not the differentiator.
+For most products, the answer is no — and won't be for years.
 
 ### Failure modes
 
