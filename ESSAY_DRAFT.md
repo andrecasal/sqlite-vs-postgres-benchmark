@@ -6,22 +6,7 @@ So I did the analysis. I decomposed the question "SQLite or PostgreSQL?" from fi
 
 Some of what I found surprised me. In particular, the factor engineers argue about most — throughput — turned out to matter least.
 
-## Decomposing the decision
-
-"Which database should I use?" is really asking: **which database maximizes the probability of my product's success while minimizing total cost?**
-
-That decomposes into four factors. I'll examine them as a funnel — starting with what you can safely stop worrying about, then progressively narrowing to the factors that actually drive the decision.
-
-| Factor | Impact | How often it's relevant |
-|---|---|---|
-| **Throughput** | Low differential | Rarely — both have massive headroom |
-| **Capabilities** | High | Depends on product (binary gate) |
-| **User-facing latency** | High | Products with global users |
-| **Development velocity** | High | Every product, always |
-
-Each step either eliminates a concern or routes you to an answer.
-
-## 1. Throughput: the factor everyone argues about that matters least
+## Throughput
 
 This is the factor engineers instinctively focus on — "can my database handle the load?" It's important to examine precisely because the intuition that it's critical turns out to be wrong for most products.
 
@@ -105,7 +90,7 @@ SQLite is faster per-query because it executes queries as function calls within 
 
 Both databases handle far more than most products need. With throughput eliminated as a differentiator, the next question is binary: does your product require a capability that only one database can provide?
 
-## 2. Capabilities: the gate question
+## Capabilities
 
 This is the only binary factor. If your product requires a capability that only one database provides, the decision is made. Everything else is irrelevant.
 
@@ -137,7 +122,7 @@ The list is shorter than commonly assumed. I researched each claimed PostgreSQL 
 
 If you don't need them, both databases can do what your product requires. The remaining factors help you choose between two viable options.
 
-## 3. User-facing latency: where the database sits matters more than which database you pick
+## User-facing latency
 
 For the individual user waiting for a page to load, **latency** is what they experience. And the dominant source of latency isn't the database engine. It's the network between the user and the database.
 
@@ -232,7 +217,7 @@ Read replicas via streaming replication can bring reads closer to users:
 
 If your users are global and read latency directly affects your product's success, SQLite at the edge delivers sub-millisecond reads worldwide — an advantage no centralized database can match. For single-region products, or products where latency is adequate with either database, one factor remains.
 
-## 4. Development velocity: the factor that matters most
+## Development velocity
 
 Every component in your stack has a cost. Not just the sticker price — the cognitive cost, the debugging cost, the onboarding cost, the "it's 3am and something broke" cost. From first principles: **the simplest system that meets your requirements is the one with the fewest ways to fail.**
 
