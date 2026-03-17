@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
-import { unlinkSync } from 'fs'
-import { computeLatencyStats, nowMs, WARMUP_OPS, DEFAULT_OPS, BATCH_SIZES, ROW, formatResultLine, type BenchmarkResult } from './utils.ts'
+import { mkdirSync, unlinkSync } from 'fs'
+import { computeLatencyStats, nowMs, WARMUP_OPS, DEFAULT_OPS, BATCH_SIZES, ROW, ansi, formatInlineResult, type BenchmarkResult } from './utils.ts'
 
 // --- Setup ---
 
@@ -35,7 +35,6 @@ const resetTable = (db: Database): void => {
 	createUsersTable(db)
 }
 
-
 const DB_DIR = '/tmp/sqlite-bench'
 const cleanupDb = (prefix: string): void => {
 	for (const suffix of ['', '-wal', '-shm']) {
@@ -49,7 +48,7 @@ const cleanupDb = (prefix: string): void => {
 
 const mkDbDir = (): void => {
 	try {
-		require('fs').mkdirSync(DB_DIR, { recursive: true })
+		mkdirSync(DB_DIR, { recursive: true })
 	} catch {
 		/* ignore */
 	}
@@ -127,44 +126,7 @@ const benchBatchedInserts = (batchSize: number, totalOps: number): BenchmarkResu
 	}
 }
 
-// --- Scenario 3: Concurrent writers ---
-
-const benchConcurrentInserts = (concurrency: number, totalOps: number): BenchmarkResult => {
-	// SQLite serializes writes (single-writer). In a real web app, concurrent HTTP requests
-	// queue on the single writer. We measure throughput of sequential writes on file,
-	// which represents the actual throughput a web app achieves regardless of concurrency.
-	// The "concurrency" parameter here is noted for comparison with Postgres, which CAN
-	// parallelize writes across connections.
-	const prefix = `concurrent-${concurrency}`
-	cleanupDb(prefix)
-	const db = createDb(`${DB_DIR}/${prefix}.db`)
-	const stmt = db.prepare('INSERT INTO users (name, email, age, bio) VALUES ($name, $email, $age, $bio)')
-
-	const allLatencies: number[] = []
-	const start = nowMs()
-
-	for (let i = 0; i < totalOps; i++) {
-		const opStart = nowMs()
-		stmt.run({ $name: ROW.name, $email: `user${i}@example.com`, $age: ROW.age, $bio: ROW.bio })
-		allLatencies.push(nowMs() - opStart)
-	}
-
-	const durationMs = nowMs() - start
-	db.close()
-	cleanupDb(prefix)
-
-	return {
-		scenario: 'Sequential inserts (file)',
-		database: 'SQLite (WAL, file)',
-		opsPerSec: Math.round((totalOps / durationMs) * 1000),
-		totalOps,
-		durationMs: Math.round(durationMs),
-		latency: computeLatencyStats(allLatencies),
-		concurrency: 1, // SQLite is always single-writer
-	}
-}
-
-// --- Scenario 4: Mixed read/write (80% reads, 20% writes) ---
+// --- Scenario 3: Mixed read/write (80% reads, 20% writes) ---
 
 const benchMixedReadWrite = (totalOps: number): BenchmarkResult => {
 	cleanupDb('mixed')
@@ -213,28 +175,28 @@ const benchMixedReadWrite = (totalOps: number): BenchmarkResult => {
 // --- Run all ---
 
 export const runSqliteBenchmarks = (): BenchmarkResult[] => {
-	console.log('\n=== SQLite Benchmarks ===\n')
+	console.log(`\n  ${ansi.bold('SQLite')} ${ansi.dim('(WAL, file on SSD)')}`)
 	const results: BenchmarkResult[] = []
 
-	console.log('Running: Sequential inserts...')
-	results.push(benchSequentialInserts(DEFAULT_OPS))
+	const seqResult = benchSequentialInserts(DEFAULT_OPS)
+	console.log(formatInlineResult(seqResult.scenario, seqResult.opsPerSec))
+	results.push(seqResult)
 
 	for (const batchSize of BATCH_SIZES) {
-		if (batchSize === 1) continue // same as sequential
-		console.log(`Running: Batched inserts (${batchSize}/txn)...`)
-		results.push(benchBatchedInserts(batchSize, DEFAULT_OPS))
+		if (batchSize === 1) continue
+		const batchResult = benchBatchedInserts(batchSize, DEFAULT_OPS)
+		console.log(formatInlineResult(batchResult.scenario, batchResult.opsPerSec))
+		results.push(batchResult)
 	}
 
-	console.log('Running: Mixed 80/20 read/write...')
-	results.push(benchMixedReadWrite(DEFAULT_OPS))
+	const mixedResult = benchMixedReadWrite(DEFAULT_OPS)
+	console.log(formatInlineResult(mixedResult.scenario, mixedResult.opsPerSec))
+	results.push(mixedResult)
 
 	return results
 }
 
 // Allow standalone execution
 if (import.meta.main) {
-	const results = runSqliteBenchmarks()
-	for (const r of results) {
-		console.log(formatResultLine(r))
-	}
+	runSqliteBenchmarks()
 }

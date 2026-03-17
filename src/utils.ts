@@ -61,11 +61,18 @@ export const getMachineInfo = (): Record<string, string> => {
 
 	let pgVersion = 'unknown'
 	try {
-		pgVersion = execFileSync('docker', ['exec', 'sqlite-vs-postgres-benchmark-postgres-1', 'psql', '-U', 'bench', '-t', '-c', 'SELECT version()'], {
-			encoding: 'utf-8',
-		}).trim()
+		const raw = execFileSync('psql', ['--version'], { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+		const match = raw.match(/(\d+[\d.]*)/)
+		pgVersion = match ? match[1]! : raw
 	} catch {
-		/* ignore */
+		try {
+			pgVersion = execFileSync('docker', ['exec', 'sqlite-vs-postgres-benchmark-postgres-1', 'psql', '-U', 'bench', '-t', '-c', 'SELECT version()'], {
+				encoding: 'utf-8',
+				stdio: ['pipe', 'pipe', 'pipe'],
+			}).trim()
+		} catch {
+			/* ignore */
+		}
 	}
 
 	return {
@@ -105,7 +112,13 @@ export const ROW = {
 	bio: 'A short biography that represents a typical text field in a web application row.',
 }
 
-// --- Standalone result formatting ---
+// --- ANSI terminal formatting ---
 
-export const formatResultLine = (r: BenchmarkResult): string =>
-	`${r.scenario} (c=${r.concurrency}): ${r.opsPerSec.toLocaleString()} ops/sec | p50=${r.latency.p50.toFixed(3)}ms p95=${r.latency.p95.toFixed(3)}ms p99=${r.latency.p99.toFixed(3)}ms`
+export const ansi = {
+	bold: (s: string): string => `\x1b[1m${s}\x1b[0m`,
+	dim: (s: string): string => `\x1b[2m${s}\x1b[0m`,
+	yellow: (s: string): string => `\x1b[33m${s}\x1b[0m`,
+}
+
+export const formatInlineResult = (scenario: string, opsPerSec: number): string =>
+	`    ${scenario.padEnd(30)}${opsPerSec.toLocaleString().padStart(10)} ops/sec`

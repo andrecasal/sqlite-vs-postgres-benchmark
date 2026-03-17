@@ -1,21 +1,21 @@
 import postgres from 'postgres'
-import { computeLatencyStats, nowMs, DEFAULT_OPS, BATCH_SIZES, CONCURRENCY_LEVELS, ROW, formatResultLine, type BenchmarkResult } from './utils.ts'
+import { computeLatencyStats, nowMs, DEFAULT_OPS, BATCH_SIZES, CONCURRENCY_LEVELS, ROW, ansi, formatInlineResult, type BenchmarkResult } from './utils.ts'
 
 // --- Setup ---
 
 const PG_DOCKER_URL = 'postgres://bench:bench@localhost:5433/bench'
 const PG_NATIVE_URL = 'postgres://bench:bench@localhost:5432/bench'
 
+type Sql = ReturnType<typeof postgres>
+
 type PgConfig = {
 	url: string
 	label: string
 }
 
-const createSql = (url: string): ReturnType<typeof postgres> => {
-	return postgres(url, { max: 50 })
-}
+const createSql = (url: string): Sql => postgres(url, { max: 50 })
 
-const setupTable = async (sql: ReturnType<typeof postgres>): Promise<void> => {
+const setupTable = async (sql: Sql): Promise<void> => {
 	await sql`DROP TABLE IF EXISTS users`
 	await sql`
 		CREATE TABLE users (
@@ -30,10 +30,9 @@ const setupTable = async (sql: ReturnType<typeof postgres>): Promise<void> => {
 	await sql`CREATE INDEX idx_users_email ON users(email)`
 }
 
-
 // --- Scenario 1: Sequential single-row inserts ---
 
-const benchSequentialInserts = async (sql: ReturnType<typeof postgres>, ops: number, label: string): Promise<BenchmarkResult> => {
+const benchSequentialInserts = async (sql: Sql, ops: number, label: string): Promise<BenchmarkResult> => {
 	await setupTable(sql)
 
 	const latencies: number[] = []
@@ -58,7 +57,7 @@ const benchSequentialInserts = async (sql: ReturnType<typeof postgres>, ops: num
 
 // --- Scenario 2: Batched inserts (N rows per transaction) ---
 
-const benchBatchedInserts = async (sql: ReturnType<typeof postgres>, batchSize: number, totalOps: number, label: string): Promise<BenchmarkResult> => {
+const benchBatchedInserts = async (sql: Sql, batchSize: number, totalOps: number, label: string): Promise<BenchmarkResult> => {
 	await setupTable(sql)
 	const batches = Math.ceil(totalOps / batchSize)
 
@@ -93,7 +92,7 @@ const benchBatchedInserts = async (sql: ReturnType<typeof postgres>, batchSize: 
 
 // --- Scenario 3: Concurrent writers ---
 
-const benchConcurrentInserts = async (sql: ReturnType<typeof postgres>, concurrency: number, totalOps: number, label: string): Promise<BenchmarkResult> => {
+const benchConcurrentInserts = async (sql: Sql, concurrency: number, totalOps: number, label: string): Promise<BenchmarkResult> => {
 	await setupTable(sql)
 	const opsPerWorker = Math.ceil(totalOps / concurrency)
 
@@ -131,7 +130,7 @@ const benchConcurrentInserts = async (sql: ReturnType<typeof postgres>, concurre
 
 // --- Scenario 4: Mixed read/write (80% reads, 20% writes) ---
 
-const benchMixedReadWrite = async (sql: ReturnType<typeof postgres>, totalOps: number, label: string): Promise<BenchmarkResult> => {
+const benchMixedReadWrite = async (sql: Sql, totalOps: number, label: string): Promise<BenchmarkResult> => {
 	await setupTable(sql)
 
 	// Seed data in a single transaction
@@ -178,26 +177,31 @@ export const PG_CONFIGS: PgConfig[] = [
 ]
 
 export const runPostgresBenchmarks = async (config: PgConfig): Promise<BenchmarkResult[]> => {
-	console.log(`\n=== ${config.label} Benchmarks ===\n`)
 	const sql = createSql(config.url)
+	await sql`SELECT 1`
+	console.log(`\n  ${ansi.bold(config.label)}`)
 	const results: BenchmarkResult[] = []
 
-	console.log('Running: Sequential inserts...')
-	results.push(await benchSequentialInserts(sql, DEFAULT_OPS, config.label))
+	const seqResult = await benchSequentialInserts(sql, DEFAULT_OPS, config.label)
+	console.log(formatInlineResult(seqResult.scenario, seqResult.opsPerSec))
+	results.push(seqResult)
 
 	for (const batchSize of BATCH_SIZES) {
 		if (batchSize === 1) continue
-		console.log(`Running: Batched inserts (${batchSize}/txn)...`)
-		results.push(await benchBatchedInserts(sql, batchSize, DEFAULT_OPS, config.label))
+		const batchResult = await benchBatchedInserts(sql, batchSize, DEFAULT_OPS, config.label)
+		console.log(formatInlineResult(batchResult.scenario, batchResult.opsPerSec))
+		results.push(batchResult)
 	}
 
 	for (const c of CONCURRENCY_LEVELS) {
-		console.log(`Running: Concurrent inserts (${c} writers)...`)
-		results.push(await benchConcurrentInserts(sql, c, DEFAULT_OPS, config.label))
+		const concResult = await benchConcurrentInserts(sql, c, DEFAULT_OPS, config.label)
+		console.log(formatInlineResult(`Concurrent (${c} writers)`, concResult.opsPerSec))
+		results.push(concResult)
 	}
 
-	console.log('Running: Mixed 80/20 read/write...')
-	results.push(await benchMixedReadWrite(sql, DEFAULT_OPS, config.label))
+	const mixedResult = await benchMixedReadWrite(sql, DEFAULT_OPS, config.label)
+	console.log(formatInlineResult(mixedResult.scenario, mixedResult.opsPerSec))
+	results.push(mixedResult)
 
 	await sql.end()
 	return results
@@ -208,8 +212,5 @@ if (import.meta.main) {
 	const config = process.argv.includes('--docker')
 		? PG_CONFIGS[1]!
 		: PG_CONFIGS[0]!
-	const results = await runPostgresBenchmarks(config)
-	for (const r of results) {
-		console.log(formatResultLine(r))
-	}
+	await runPostgresBenchmarks(config)
 }
