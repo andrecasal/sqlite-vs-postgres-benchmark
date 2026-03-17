@@ -8,7 +8,7 @@ Some of what I found surprised me. In particular, the factor engineers argue abo
 
 ## Throughput
 
-This is the factor engineers instinctively focus on — "can my database handle the load?" It's important to examine precisely because the intuition that it's critical turns out to be wrong for most products.
+This is the factor engineers instinctively focus on — "can my database handle the load?" Let's find out.
 
 ### How much write throughput does a product actually need?
 
