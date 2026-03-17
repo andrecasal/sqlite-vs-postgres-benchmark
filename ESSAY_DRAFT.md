@@ -82,15 +82,7 @@ SQLite is faster per-query because it executes queries as function calls within 
 
 The question isn't "do I have concurrent users" — every web app does. It's **"do I have more writes per second than one process can handle?"** SQLite handles ~23K writes/sec through a single writer. A 1M DAU SaaS needs ~700 writes/sec at peak. You'd need to be well past 10M DAU with write-heavy patterns before a single writer becomes the bottleneck.
 
-For most products, the answer is no — and won't be for years.
-
-### Failure modes
-
-**SQLite** — When writes queue behind the single writer, `SQLITE_BUSY` triggers automatic retry (with `busy_timeout`). Tail latency climbs gradually. At 1,000 writes/sec, queue depth is effectively zero. Mitigations: batching, Turso's `BEGIN CONCURRENT` (~4× throughput), or migrate to PostgreSQL.
-
-**PostgreSQL** — Connection exhaustion. Each connection is an OS process (~10MB). At `max_connections=200`, you hit process limits. Mitigations: PgBouncer, Supavisor — but these add operational complexity (another component, another failure mode).
-
-Both databases handle far more than most products need. With throughput eliminated as a differentiator, the next question is binary: does your product require a capability that only one database can provide?
+For most products, the answer is no — and won't be for years. With throughput eliminated as a differentiator, the next question is binary: does your product require a capability that only one database can provide?
 
 ## Capabilities
 
