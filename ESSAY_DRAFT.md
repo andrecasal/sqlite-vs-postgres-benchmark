@@ -78,7 +78,7 @@ SQLite is faster per-query because it executes queries as function calls within 
 | 16 | 35,370 |
 | 32 | 24,371 |
 
-**PostgreSQL peaks at 35,370 ops/sec with 16 connections — exceeding SQLite's 23,403.** When your application has many simultaneous writers, PostgreSQL's multi-process architecture delivers higher aggregate throughput. The crossover happens at ~4 concurrent connections.
+**PostgreSQL peaks at 35,370 ops/sec with 16 connections — exceeding SQLite's 23,403.** The crossover happens at ~4 concurrent connections. This matters when multiple independent processes write to the same database simultaneously — think multiple app servers behind a load balancer, or a worker pool processing background jobs in parallel. In a single-server web app (one process handling requests sequentially or with async I/O), writes are effectively serialized regardless of database, and SQLite's lower per-query overhead wins.
 
 **But for the 1M DAU SaaS needing ~700 writes/sec at peak, both databases are at <10% capacity.** Throughput is not the differentiator.
 
