@@ -3,8 +3,7 @@ import { computeLatencyStats, nowMs, DEFAULT_OPS, BATCH_SIZES, CONCURRENCY_LEVEL
 
 // --- Setup ---
 
-const PG_DOCKER_URL = 'postgres://bench:bench@localhost:5433/bench'
-const PG_NATIVE_URL = 'postgres://bench:bench@localhost:5432/bench'
+const PG_URL = 'postgres://bench:bench@localhost:5432/bench'
 
 type Sql = ReturnType<typeof postgres>
 
@@ -171,10 +170,7 @@ const benchMixedReadWrite = async (sql: Sql, totalOps: number, label: string): P
 
 // --- Run all ---
 
-export const PG_CONFIGS: PgConfig[] = [
-	{ url: PG_NATIVE_URL, label: 'PostgreSQL (native, SSD)' },
-	{ url: PG_DOCKER_URL, label: 'PostgreSQL (Docker, tmpfs)' },
-]
+export const PG_CONFIG: PgConfig = { url: PG_URL, label: 'PostgreSQL (native, SSD)' }
 
 export const runPostgresBenchmarks = async (config: PgConfig): Promise<BenchmarkResult[]> => {
 	const sql = createSql(config.url)
@@ -209,8 +205,5 @@ export const runPostgresBenchmarks = async (config: PgConfig): Promise<Benchmark
 
 // Allow standalone execution
 if (import.meta.main) {
-	const config = process.argv.includes('--docker')
-		? PG_CONFIGS[1]!
-		: PG_CONFIGS[0]!
-	await runPostgresBenchmarks(config)
+	await runPostgresBenchmarks(PG_CONFIG)
 }

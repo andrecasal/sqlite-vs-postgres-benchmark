@@ -1,9 +1,7 @@
 import { writeFileSync, mkdirSync } from 'fs'
 import { runSqliteBenchmarks } from './sqlite-bench.ts'
-import { runPostgresBenchmarks, PG_CONFIGS } from './postgres-bench.ts'
+import { runPostgresBenchmarks, PG_CONFIG } from './postgres-bench.ts'
 import { formatResultsTable, getMachineInfo, ansi, type BenchmarkResult } from './utils.ts'
-
-type PgResultSet = { label: string; results: BenchmarkResult[] }
 
 // --- Formatted terminal comparison ---
 
@@ -79,32 +77,13 @@ const printComparison = (
 	}
 }
 
-const printDockerOverhead = (
-	nativeResults: BenchmarkResult[],
-	dockerResults: BenchmarkResult[],
-): void => {
-	console.log('')
-	console.log(`  ${ansi.bold('Docker Overhead')} ${ansi.dim('native SSD vs Docker tmpfs')}`)
-	console.log('')
-	console.log(`  ${''.padEnd(30)}${ansi.dim('Native'.padStart(12))}${ansi.dim('Docker'.padStart(12))}${ansi.dim('Overhead'.padStart(14))}`)
-	console.log(`  ${ansi.dim('─'.repeat(68))}`)
-
-	for (const nr of nativeResults.filter(r => r.concurrency === 1)) {
-		const dr = dockerResults.find(d => d.scenario === nr.scenario && d.concurrency === nr.concurrency)
-		if (!dr) continue
-		const overhead = ((nr.opsPerSec - dr.opsPerSec) / nr.opsPerSec) * 100
-		console.log(
-			`  ${nr.scenario.padEnd(30)}${nr.opsPerSec.toLocaleString().padStart(12)}${dr.opsPerSec.toLocaleString().padStart(12)}${ansi.yellow((overhead.toFixed(0) + '% slower').padStart(14))}`,
-		)
-	}
-}
-
 // --- Markdown report (saved to file) ---
 
 const generateMarkdownReport = (
 	machine: Record<string, string>,
 	sqliteResults: BenchmarkResult[],
-	pgResultSets: PgResultSet[],
+	pgResults: BenchmarkResult[],
+	pgLabel: string,
 ): string => {
 	const lines: string[] = []
 
@@ -122,48 +101,25 @@ const generateMarkdownReport = (
 	lines.push(formatResultsTable(sqliteResults))
 	lines.push('')
 
-	for (const pgSet of pgResultSets) {
-		lines.push(`## ${pgSet.label} Results`)
-		lines.push('')
-		lines.push(formatResultsTable(pgSet.results))
-		lines.push('')
-	}
+	lines.push(`## ${pgLabel} Results`)
+	lines.push('')
+	lines.push(formatResultsTable(pgResults))
+	lines.push('')
 
-	// Head-to-head comparison for each PG config
-	for (const pgSet of pgResultSets) {
-		lines.push(`## Head-to-Head: SQLite vs ${pgSet.label}`)
-		lines.push('')
-		lines.push('| Scenario | Concurrency | SQLite ops/sec | Postgres ops/sec | Ratio (SQLite/PG) |')
-		lines.push('|----------|-------------|----------------|------------------|--------------------|')
+	// Head-to-head comparison
+	lines.push(`## Head-to-Head: SQLite vs ${pgLabel}`)
+	lines.push('')
+	lines.push('| Scenario | Concurrency | SQLite ops/sec | Postgres ops/sec | Ratio (SQLite/PG) |')
+	lines.push('|----------|-------------|----------------|------------------|--------------------|')
 
-		for (const sr of sqliteResults) {
-			const pg = pgSet.results.find((p) => p.scenario === sr.scenario && p.concurrency === sr.concurrency)
-			if (pg) {
-				const ratio = sr.opsPerSec / pg.opsPerSec
-				lines.push(`| ${sr.scenario} | ${sr.concurrency} | ${sr.opsPerSec.toLocaleString()} | ${pg.opsPerSec.toLocaleString()} | ${ratio.toFixed(2)}x |`)
-			}
+	for (const sr of sqliteResults) {
+		const pg = pgResults.find((p) => p.scenario === sr.scenario && p.concurrency === sr.concurrency)
+		if (pg) {
+			const ratio = sr.opsPerSec / pg.opsPerSec
+			lines.push(`| ${sr.scenario} | ${sr.concurrency} | ${sr.opsPerSec.toLocaleString()} | ${pg.opsPerSec.toLocaleString()} | ${ratio.toFixed(2)}x |`)
 		}
-		lines.push('')
 	}
-
-	// Docker overhead comparison if both PG configs present
-	const native = pgResultSets.find(s => s.label.includes('native'))
-	const docker = pgResultSets.find(s => s.label.includes('Docker'))
-	if (native && docker) {
-		lines.push('## Docker Overhead')
-		lines.push('')
-		lines.push(`| Scenario | ${native.label} ops/sec | ${docker.label} ops/sec | Docker overhead |`)
-		lines.push('|----------|----------------|------------------|--------------------|')
-
-		for (const nr of native.results) {
-			const dr = docker.results.find((d) => d.scenario === nr.scenario && d.concurrency === nr.concurrency)
-			if (dr) {
-				const overhead = (((nr.opsPerSec - dr.opsPerSec) / nr.opsPerSec) * 100).toFixed(1)
-				lines.push(`| ${nr.scenario} (c=${nr.concurrency}) | ${nr.opsPerSec.toLocaleString()} | ${dr.opsPerSec.toLocaleString()} | ${overhead}% slower |`)
-			}
-		}
-		lines.push('')
-	}
+	lines.push('')
 
 	lines.push('## Configuration')
 	lines.push('')
@@ -175,17 +131,12 @@ const generateMarkdownReport = (
 	lines.push('- `PRAGMA mmap_size = 268435456` (256MB)')
 	lines.push('- `PRAGMA busy_timeout = 5000`')
 	lines.push('')
-	lines.push('### PostgreSQL (native)')
+	lines.push('### PostgreSQL')
 	lines.push('- Homebrew PostgreSQL 17, data on macOS APFS (SSD)')
 	lines.push('- `shared_buffers = 256MB`')
 	lines.push('- `synchronous_commit = on`')
 	lines.push('- `max_connections = 200`')
 	lines.push('- `work_mem = 16MB`')
-	lines.push('')
-	lines.push('### PostgreSQL (Docker)')
-	lines.push('- Docker container (postgres:17)')
-	lines.push('- Same PostgreSQL settings as native')
-	lines.push('- Data on tmpfs (RAM disk)')
 	lines.push('')
 
 	return lines.join('\n')
@@ -202,34 +153,23 @@ const main = async (): Promise<void> => {
 	// Run benchmarks
 	const sqliteResults = runSqliteBenchmarks()
 
-	const pgResultSets: PgResultSet[] = []
-	for (const config of PG_CONFIGS) {
-		try {
-			const results = await runPostgresBenchmarks(config)
-			pgResultSets.push({ label: config.label, results })
-		} catch {
-			// Silently skip unavailable configs
-		}
+	let pgResults: BenchmarkResult[] = []
+	try {
+		pgResults = await runPostgresBenchmarks(PG_CONFIG)
+	} catch {
+		// PostgreSQL not available
 	}
 
 	// Formatted comparison
-	if (pgResultSets.length > 0) {
-		const primaryPg = pgResultSets[0]!
-		printComparison(primaryPg.label, sqliteResults, primaryPg.results)
-
-		const native = pgResultSets.find(s => s.label.includes('native'))
-		const docker = pgResultSets.find(s => s.label.includes('Docker'))
-		if (native && docker) {
-			printDockerOverhead(native.results, docker.results)
-		}
+	if (pgResults.length > 0) {
+		printComparison(PG_CONFIG.label, sqliteResults, pgResults)
 	}
 
 	// Save results
 	mkdirSync('results', { recursive: true })
 	const isoTimestamp = new Date().toISOString()
 	const timestamp = isoTimestamp.replace(/[:.]/g, '-')
-	const allPgResults = pgResultSets.flatMap(s => s.results)
-	const allResults = [...sqliteResults, ...allPgResults]
+	const allResults = [...sqliteResults, ...pgResults]
 	const output = {
 		timestamp: isoTimestamp,
 		machine: machineInfo,
@@ -238,7 +178,7 @@ const main = async (): Promise<void> => {
 
 	writeFileSync(`results/benchmark-${timestamp}.json`, JSON.stringify(output, null, 2))
 
-	const report = generateMarkdownReport(machineInfo, sqliteResults, pgResultSets)
+	const report = generateMarkdownReport(machineInfo, sqliteResults, pgResults, PG_CONFIG.label)
 	writeFileSync(`results/benchmark-${timestamp}.md`, report)
 	writeFileSync('results/latest.md', report)
 	writeFileSync('results/latest.json', JSON.stringify(output, null, 2))

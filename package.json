@@ -5,9 +5,7 @@
 	"scripts": {
 		"bench:sqlite": "bun run src/sqlite-bench.ts",
 		"bench:postgres": "bun run src/postgres-bench.ts",
-		"bench:all": "bun run src/run-all.ts",
-		"pg:up": "docker compose up -d",
-		"pg:down": "docker compose down -v"
+		"bench:all": "bun run src/run-all.ts"
 	},
 	"dependencies": {
 		"postgres": "^3.4.7"

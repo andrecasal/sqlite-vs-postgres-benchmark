@@ -17,20 +17,17 @@ Four scenarios, designed to represent common web application database usage:
 
 ## Methodology
 
-The benchmark runs PostgreSQL in two configurations to isolate Docker overhead from actual database performance:
+Both databases run on the same machine, same SSD — apples to apples.
 
 - **SQLite**: File-based (not `:memory:`), WAL mode, `synchronous=NORMAL`, 64MB cache, 256MB mmap. Data on macOS APFS (SSD).
-- **PostgreSQL (native)**: Homebrew installation, `shared_buffers=256MB`, `synchronous_commit=on`. Data on same SSD as SQLite.
-- **PostgreSQL (Docker)**: Docker container (postgres:17), same PostgreSQL settings. Data on tmpfs (RAM disk).
+- **PostgreSQL**: Native Homebrew installation (not Docker), `shared_buffers=256MB`, `synchronous_commit=on`. Data on same SSD.
 - **Row schema**: Realistic web app table with `id`, `name`, `email` (indexed), `age`, `bio` (text), `created_at`.
 - **Operations**: 10,000 per scenario.
 - **Driver**: `bun:sqlite` (built-in) for SQLite, `postgres` (postgres.js) for PostgreSQL.
 
-The native comparison is apples-to-apples (both on SSD). The Docker comparison reveals how much overhead Docker Desktop adds on macOS.
-
 ## Results (Apple M2 Pro, 16GB RAM)
 
-### Head-to-head: SQLite vs PostgreSQL native (both on SSD)
+### Head-to-head (single connection)
 
 | Scenario | SQLite (file, SSD) | Postgres (native, SSD) | Ratio |
 |---|---|---|---|
@@ -39,7 +36,7 @@ The native comparison is apples-to-apples (both on SSD). The Docker comparison r
 
 SQLite is faster per-query because it executes as function calls within the same process (~0.02ms), while PostgreSQL requires inter-process communication via Unix socket (~0.10ms).
 
-### Postgres concurrent scaling (native)
+### Postgres concurrent scaling
 
 | Connections | Ops/sec |
 |---|---|
@@ -51,16 +48,6 @@ SQLite is faster per-query because it executes as function calls within the same
 
 PostgreSQL peaks at ~35K ops/sec with 16 concurrent connections — exceeding SQLite's ~23K. When your application has many simultaneous writers, PostgreSQL's multi-process architecture delivers higher aggregate throughput.
 
-### Docker overhead
-
-| Scenario | Native (SSD) | Docker (tmpfs) | Overhead |
-|---|---|---|---|
-| Sequential inserts | 7,740 ops/sec | 4,490 ops/sec | 42% slower |
-| Batched 100/txn | 19,098 ops/sec | 4,283 ops/sec | 78% slower |
-| Mixed 80/20 | 11,824 ops/sec | 3,961 ops/sec | 67% slower |
-
-Docker Desktop on macOS runs PostgreSQL inside a Linux VM, adding ~0.07ms per round-trip. If you've seen benchmarks showing PostgreSQL at ~5,000 ops/sec, Docker overhead is likely the reason. Always benchmark against native installations.
-
 ### Latency (p50)
 
 | Scenario | SQLite | Postgres (native) |
@@ -70,17 +57,12 @@ Docker Desktop on macOS runs PostgreSQL inside a Linux VM, adding ~0.07ms per ro
 
 ## How to reproduce
 
-**Prerequisites:** [Bun](https://bun.sh/)
+**Prerequisites:** [Bun](https://bun.sh/), PostgreSQL (native installation)
 
 ```bash
+# Install dependencies
 bun install
-```
 
-### Option A: Native PostgreSQL + Docker PostgreSQL (recommended)
-
-This runs both configurations and produces a Docker overhead comparison.
-
-```bash
 # Install PostgreSQL via Homebrew (if not already installed)
 brew install postgresql@17
 brew services start postgresql@17
@@ -90,33 +72,14 @@ createuser -s bench
 createdb -O bench bench
 psql -d bench -c "ALTER USER bench WITH PASSWORD 'bench';"
 
-# Start Docker PostgreSQL
-bun run pg:up
-
-# Run all benchmarks (SQLite + native PostgreSQL + Docker PostgreSQL)
+# Run all benchmarks
 bun run bench:all
 
 # Results are saved to results/latest.md and results/latest.json
 
-# Cleanup
-bun run pg:down
-brew services stop postgresql@17  # optional
-```
-
-### Option B: Docker PostgreSQL only
-
-If you don't want to install PostgreSQL natively, the benchmark will skip the native configuration automatically.
-
-```bash
-bun run pg:up
-bun run bench:all
-bun run pg:down
-```
-
-### Option C: SQLite only
-
-```bash
+# Individual benchmarks
 bun run bench:sqlite
+bun run bench:postgres
 ```
 
 ## What this does NOT measure
