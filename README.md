@@ -44,7 +44,7 @@ bun run bench:all
 
 ### Head-to-head (single connection)
 
-| Scenario | SQLite (file, SSD) | Postgres (native, SSD) | Ratio |
+| Scenario | SQLite (file, SSD) | Postgres (native, SSD) | SQLite faster by |
 |---|---|---|---|
 | Sequential inserts | 23,403 ops/sec | 7,740 ops/sec | 3.0× |
 | Mixed 80/20 read/write | 96,051 ops/sec | 11,824 ops/sec | 8.1× |

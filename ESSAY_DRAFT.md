@@ -61,7 +61,7 @@ I built a reproducible benchmark measuring SQLite and PostgreSQL on the same mac
 
 **Single-connection results (the fair comparison — both on SSD):**
 
-| Scenario | SQLite | PostgreSQL (native) | Ratio |
+| Scenario | SQLite | PostgreSQL (native) | SQLite faster by |
 |---|---|---|---|
 | Sequential inserts | 23,403 ops/sec | 7,740 ops/sec | 3.0× |
 | Mixed 80/20 read/write | 96,051 ops/sec | 11,824 ops/sec | 8.1× |

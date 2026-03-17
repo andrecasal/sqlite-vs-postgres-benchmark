@@ -17,7 +17,7 @@ const printComparison = (
 	console.log(`  ${ansi.bold(`Head-to-Head: SQLite vs ${pgLabel}`)}`)
 	console.log(`  ${ansi.dim('Single connection · ops/sec · higher is better')}`)
 	console.log('')
-	console.log(`  ${''.padEnd(30)}${ansi.dim('SQLite'.padStart(12))}${ansi.dim('Postgres'.padStart(12))}${ansi.dim('Ratio'.padStart(10))}`)
+	console.log(`  ${''.padEnd(30)}${ansi.dim('SQLite'.padStart(12))}${ansi.dim('Postgres'.padStart(12))}${ansi.dim('SQLite×'.padStart(10))}`)
 	console.log(`  ${ansi.dim('─'.repeat(64))}`)
 
 	for (const sr of singleSqlite) {
@@ -109,7 +109,7 @@ const generateMarkdownReport = (
 	// Head-to-head comparison
 	lines.push(`## Head-to-Head: SQLite vs ${pgLabel}`)
 	lines.push('')
-	lines.push('| Scenario | Concurrency | SQLite ops/sec | Postgres ops/sec | Ratio (SQLite/PG) |')
+	lines.push('| Scenario | Concurrency | SQLite ops/sec | Postgres ops/sec | SQLite faster by |')
 	lines.push('|----------|-------------|----------------|------------------|--------------------|')
 
 	for (const sr of sqliteResults) {
