@@ -97,18 +97,6 @@ SQLite is faster per-query because it executes queries as function calls within 
 
 **But for the 1M DAU SaaS needing ~700 writes/sec at peak, both databases are at <10% capacity.** Throughput is not the differentiator.
 
-### Docker overhead: a methodological warning
-
-We also ran PostgreSQL in Docker to show why many benchmarks overstate the gap:
-
-| Scenario | Native (SSD) | Docker (tmpfs) | Docker overhead |
-|---|---|---|---|
-| Sequential inserts | 7,740 | 4,490 | 42% slower |
-| Batched 100/txn | 19,098 | 4,283 | 78% slower |
-| Mixed 80/20 | 11,824 | 3,961 | 67% slower |
-
-Docker Desktop on macOS runs PostgreSQL inside a Linux VM, adding ~0.07ms per round-trip ([well-documented](https://github.com/docker/for-mac/issues/5086)). **If you've seen benchmarks showing PostgreSQL at ~5,000 ops/sec, Docker overhead is likely the reason.** Always benchmark against native installations.
-
 ### Failure modes
 
 **SQLite** — When writes queue behind the single writer, `SQLITE_BUSY` triggers automatic retry (with `busy_timeout`). Tail latency climbs gradually. At 1,000 writes/sec, queue depth is effectively zero. Mitigations: batching, Turso's `BEGIN CONCURRENT` (~4× throughput), or migrate to PostgreSQL.
