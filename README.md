@@ -19,11 +19,13 @@ Four scenarios, designed to represent common web application database usage:
 
 Both databases run on the same machine, same SSD — apples to apples.
 
-- **SQLite**: File-based (not `:memory:`), WAL mode, `synchronous=NORMAL`, 64MB cache, 256MB mmap. Data on macOS APFS (SSD).
-- **PostgreSQL**: Native Homebrew installation (not Docker), `shared_buffers=256MB`, `synchronous_commit=on`. Data on same SSD.
+- **SQLite**: File-based (not `:memory:`), WAL mode, `synchronous=NORMAL`, 64MB cache, 256MB mmap. Data on SSD.
+- **PostgreSQL**: Native installation (not Docker), `shared_buffers=256MB`, `synchronous_commit=on`. Data on same SSD.
 - **Row schema**: Realistic web app table with `id`, `name`, `email` (indexed), `age`, `bio` (text), `created_at`.
 - **Operations**: 10,000 per scenario.
 - **Driver**: `bun:sqlite` (built-in) for SQLite, `postgres` (postgres.js) for PostgreSQL.
+
+> **Note:** These benchmarks were developed and tested on macOS (Apple Silicon). The setup instructions below use Homebrew. If you're on Linux, install PostgreSQL via your package manager and create the `bench` user/database equivalently.
 
 ## Results (Apple M2 Pro, 16GB RAM)
 
@@ -57,13 +59,26 @@ PostgreSQL peaks at ~35K ops/sec with 16 concurrent connections — exceeding SQ
 
 ## How to reproduce
 
-**Prerequisites:** [Bun](https://bun.sh/), PostgreSQL (native installation)
+**Prerequisites:** [Bun](https://bun.sh/) (v1.0+)
 
 ```bash
-# Install dependencies
+git clone https://github.com/andrecasal/sqlite-vs-postgres-benchmark.git
+cd sqlite-vs-postgres-benchmark
 bun install
+```
 
-# Install PostgreSQL via Homebrew (if not already installed)
+### SQLite only (no PostgreSQL needed)
+
+```bash
+bun run bench:sqlite
+```
+
+### Full benchmark (SQLite + PostgreSQL)
+
+Requires a native PostgreSQL installation with a `bench` user and database:
+
+```bash
+# Install PostgreSQL via Homebrew (macOS)
 brew install postgresql@17
 brew services start postgresql@17
 
@@ -76,11 +91,9 @@ psql -d bench -c "ALTER USER bench WITH PASSWORD 'bench';"
 bun run bench:all
 
 # Results are saved to results/latest.md and results/latest.json
-
-# Individual benchmarks
-bun run bench:sqlite
-bun run bench:postgres
 ```
+
+> **Troubleshooting:** If `createuser` fails with a permission error, your PostgreSQL installation may use `peer` authentication. Try `sudo -u postgres createuser -s bench` instead.
 
 ## What this does NOT measure
 
