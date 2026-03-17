@@ -78,9 +78,11 @@ SQLite is faster per-query because it executes queries as function calls within 
 | 16 | 35,370 |
 | 32 | 24,371 |
 
-**PostgreSQL peaks at 35,370 ops/sec with 16 connections — exceeding SQLite's 23,403.** The crossover happens at ~4 concurrent connections.
+**PostgreSQL peaks at 35,370 ops/sec with 16 connections — exceeding SQLite's 23,403.** The crossover happens at ~4 concurrent connections. But note what's happening: PostgreSQL's concurrent writers are multiple processes on the **same server**, sharing the same data files and memory. Writes still funnel to a single machine. For writes across multiple servers, PostgreSQL uses a single primary — replicas are read-only. Both databases are single-server for writes.
 
 The question isn't "do I have concurrent users" — every web app does. It's **"do I have more writes per second than one process can handle?"** SQLite handles ~23K writes/sec through a single writer. A 1M DAU SaaS needs ~700 writes/sec at peak. You'd need to be well past 10M DAU with write-heavy patterns before a single writer becomes the bottleneck.
+
+And if you do hit that limit, SQLite's first scaling step is vertical: a faster CPU increases single-writer throughput with zero architecture changes. No new processes, no connection pooler, no migration. PostgreSQL's concurrency advantage only matters after you've exhausted what a single core can do — which, at 23K writes/sec, is a problem most products will never have.
 
 For most products, the answer is no — and won't be for years. With throughput eliminated as a differentiator, the next question is binary: does your product require a capability that only one database can provide?
 
