@@ -1,0 +1,15 @@
+{
+	"name": "sqlite-vs-postgres-benchmark",
+	"version": "1.0.0",
+	"description": "Reproducible benchmarks comparing SQLite (WAL mode) and PostgreSQL write throughput under realistic web application conditions",
+	"scripts": {
+		"bench:sqlite": "bun run src/sqlite-bench.ts",
+		"bench:postgres": "bun run src/postgres-bench.ts",
+		"bench:all": "bun run src/run-all.ts",
+		"pg:up": "docker compose up -d",
+		"pg:down": "docker compose down -v"
+	},
+	"dependencies": {
+		"postgres": "^3.4.7"
+	}
+}

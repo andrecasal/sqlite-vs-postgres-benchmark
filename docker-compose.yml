@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: bench
+      POSTGRES_PASSWORD: bench
+      POSTGRES_DB: bench
+    ports:
+      - "5433:5432"
+    # Tune for throughput benchmarking
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "synchronous_commit=on"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "work_mem=16MB"
+    tmpfs:
+      - /var/lib/postgresql/data
