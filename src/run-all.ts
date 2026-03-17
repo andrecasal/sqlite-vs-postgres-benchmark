@@ -207,10 +207,8 @@ const main = async (): Promise<void> => {
 		try {
 			const results = await runPostgresBenchmarks(config)
 			pgResultSets.push({ label: config.label, results })
-		} catch (err) {
-			const msg = err instanceof Error ? err.message : String(err)
-			const reason = msg.split('\n').find(line => line.trim()) ?? 'connection failed'
-			console.log(`\n  ${ansi.dim(`${config.label} — skipped (${reason})`)}`)
+		} catch {
+			// Silently skip unavailable configs
 		}
 	}
 
